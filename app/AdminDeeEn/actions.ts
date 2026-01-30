@@ -60,7 +60,7 @@ export async function saveBlog(blog: {
     excerpt: string;
     content: string;
     slug: string;
-}) {
+}): Promise<{ success: boolean; error?: string }> {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
 
     // Auto-generate slug if title is provided and slug is not (or if it's a new blog)
@@ -93,7 +93,7 @@ export async function saveBlog(blog: {
     return { success: true };
 }
 
-export async function deleteBlog(slug: string) {
+export async function deleteBlog(slug: string): Promise<{ success: boolean; error?: string }> {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
 
     const { error } = await supabase
@@ -109,7 +109,7 @@ export async function deleteBlog(slug: string) {
     return { success: true };
 }
 
-export async function uploadImage(formData: FormData) {
+export async function uploadImage(formData: FormData): Promise<{ success: boolean; error?: string; url?: string }> {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
 
     // Filesystem usage is forbidden. Returning error or using Supabase Storage if bucket exists.
