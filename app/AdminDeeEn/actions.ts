@@ -2,17 +2,12 @@
 
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import fs from "fs";
-import path from "path";
-import { BlogPost, Difficulty } from "@/lib/types";
 import { redirect } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 const USERNAME = process.env.ADMIN_USERNAME || "admin";
 const PASSWORD = process.env.ADMIN_PASSWORD || "password";
 const SECRET = new TextEncoder().encode(process.env.SESSION_SECRET || "secret");
-
-const blogsDirectory = path.join(process.cwd(), "content/blogs");
-const imagesDirectory = path.join(process.cwd(), "public/images/blogs");
 
 export async function login(formData: FormData) {
     const username = formData.get("username");
@@ -68,32 +63,48 @@ export async function saveBlog(blog: {
 }) {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
 
-    const frontmatter = [
-        "---",
-        `title: "${blog.title.replace(/"/g, '\\"')}"`,
-        `author: "${blog.author.replace(/"/g, '\\"')}"`,
-        `publishDate: "${blog.publishDate}"`,
-        `difficulty: "${blog.difficulty}"`,
-        `tags: ${JSON.stringify(blog.tags)}`,
-        `thumbnailImage: "${blog.thumbnailImage}"`,
-        `excerpt: "${blog.excerpt.replace(/"/g, '\\"')}"`,
-        "---",
-        "",
-        blog.content,
-    ].join("\n");
+    // Auto-generate slug if title is provided and slug is not (or if it's a new blog)
+    const generatedSlug = blog.slug || blog.title.toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^\w-]/g, "")
+        .replace(/--+/g, "-")
+        .replace(/^-+|-+$/g, "");
 
-    const filePath = path.join(blogsDirectory, `${blog.slug}.md`);
-    fs.writeFileSync(filePath, frontmatter, "utf8");
+    const { data, error } = await supabase
+        .from("blogs")
+        .upsert({
+            title: blog.title,
+            slug: generatedSlug,
+            content: blog.content,
+            excerpt: blog.excerpt,
+            author: blog.author,
+            publish_date: blog.publishDate,
+            difficulty: blog.difficulty,
+            tags: blog.tags,
+            thumbnail_url: blog.thumbnailImage,
+            published: true
+        });
+
+    if (error) {
+        console.error("Supabase Error:", error);
+        return { success: false, error: error.message };
+    }
+
     return { success: true };
 }
 
 export async function deleteBlog(slug: string) {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
-    const filePath = path.join(blogsDirectory, `${slug}.md`);
-    const filePathMdx = path.join(blogsDirectory, `${slug}.mdx`);
 
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    else if (fs.existsSync(filePathMdx)) fs.unlinkSync(filePathMdx);
+    const { error } = await supabase
+        .from("blogs")
+        .delete()
+        .eq("slug", slug);
+
+    if (error) {
+        console.error("Supabase Error:", error);
+        return { success: false, error: error.message };
+    }
 
     return { success: true };
 }
@@ -101,19 +112,10 @@ export async function deleteBlog(slug: string) {
 export async function uploadImage(formData: FormData) {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
 
-    const file = formData.get("image") as File;
-    if (!file) return { success: false, error: "No file uploaded" };
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    if (!fs.existsSync(imagesDirectory)) {
-        fs.mkdirSync(imagesDirectory, { recursive: true });
-    }
-
-    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
-    const filePath = path.join(imagesDirectory, fileName);
-    fs.writeFileSync(filePath, buffer);
-
-    return { success: true, url: `/images/blogs/${fileName}` };
+    // Filesystem usage is forbidden. Returning error or using Supabase Storage if bucket exists.
+    // For now, we recommend users to use external URLs or implement Supabase Storage.
+    return {
+        success: false,
+        error: "Direct image upload is disabled (Filesystem usage is forbidden). Please use a Supabase Storage bucket or external URL."
+    };
 }

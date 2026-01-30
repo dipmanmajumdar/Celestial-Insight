@@ -1,61 +1,87 @@
-import fs from "fs";
-import path from "path";
-import matter from "gray-matter";
+import { supabase } from "./supabaseClient";
 import { BlogPost, BlogMetadata } from "./types";
 
-const blogsDirectory = path.join(process.cwd(), "content/blogs");
-
 export async function getBlogSlugs() {
-    if (!fs.existsSync(blogsDirectory)) {
+    const { data, error } = await supabase
+        .from("blogs")
+        .select("slug");
+
+    if (error) {
+        console.error("Error fetching slugs:", error);
         return [];
     }
-    return fs.readdirSync(blogsDirectory).filter((file) => file.endsWith(".md") || file.endsWith(".mdx"));
+    return data.map(b => b.slug);
 }
 
 export async function getBlogBySlug(slug: string): Promise<BlogPost | null> {
-    const realSlug = slug.replace(/\.mdx?$/, "");
-    const fullPath = path.join(blogsDirectory, `${realSlug}.md`);
-    const fullPathMdx = path.join(blogsDirectory, `${realSlug}.mdx`);
+    const { data, error } = await supabase
+        .from("blogs")
+        .select("*")
+        .eq("slug", slug)
+        .single();
 
-    let actualPath = "";
-    if (fs.existsSync(fullPath)) {
-        actualPath = fullPath;
-    } else if (fs.existsSync(fullPathMdx)) {
-        actualPath = fullPathMdx;
-    } else {
+    if (error || !data) {
+        console.error("Error fetching blog by slug:", error);
         return null;
     }
 
-    const fileContents = fs.readFileSync(actualPath, "utf8");
-    const { data, content } = matter(fileContents);
-
     return {
-        ...data,
-        slug: realSlug,
-        content,
+        title: data.title,
+        author: data.author,
+        publishDate: data.publish_date,
+        difficulty: data.difficulty,
+        tags: data.tags,
+        thumbnailImage: data.thumbnail_url,
+        excerpt: data.excerpt,
+        slug: data.slug,
+        content: data.content,
     } as BlogPost;
 }
 
 export async function getAllBlogs(): Promise<BlogMetadata[]> {
-    const slugs = await getBlogSlugs();
-    const blogs = await Promise.all(
-        slugs.map(async (slug) => {
-            const blog = await getBlogBySlug(slug);
-            if (!blog) return null;
-            const { content, ...metadata } = blog;
-            return metadata;
-        })
-    );
+    const { data, error } = await supabase
+        .from("blogs")
+        .select("*")
+        .order("publish_date", { ascending: false });
 
-    return (blogs.filter((blog) => blog !== null) as BlogMetadata[]).sort((a, b) => {
-        return new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime();
-    });
+    if (error) {
+        console.error("Error fetching blogs:", error);
+        return [];
+    }
+
+    return data.map((blog) => ({
+        title: blog.title,
+        author: blog.author,
+        publishDate: blog.publish_date,
+        difficulty: blog.difficulty,
+        tags: blog.tags,
+        thumbnailImage: blog.thumbnail_url,
+        excerpt: blog.excerpt,
+        slug: blog.slug,
+    }));
 }
 
 export async function getRelatedBlogs(currentSlug: string, tags: string[]): Promise<BlogMetadata[]> {
-    const allBlogs = await getAllBlogs();
-    return allBlogs
-        .filter((blog) => blog.slug !== currentSlug)
-        .filter((blog) => blog.tags.some((tag) => tags.includes(tag)))
-        .slice(0, 3);
+    const { data, error } = await supabase
+        .from("blogs")
+        .select("*")
+        .neq("slug", currentSlug)
+        .contains("tags", tags)
+        .limit(3);
+
+    if (error) {
+        console.error("Error fetching related blogs:", error);
+        return [];
+    }
+
+    return data.map((blog) => ({
+        title: blog.title,
+        author: blog.author,
+        publishDate: blog.publish_date,
+        difficulty: blog.difficulty,
+        tags: blog.tags,
+        thumbnailImage: blog.thumbnail_url,
+        excerpt: blog.excerpt,
+        slug: blog.slug,
+    }));
 }

@@ -18,6 +18,7 @@ interface BlogEditorProps {
 }
 
 export function BlogEditor({ blog, onClose, onSave }: BlogEditorProps) {
+    const [status, setStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: "" });
     const [loading, setLoading] = useState(false);
     const [contentLoading, setContentLoading] = useState(!!blog);
     const [formData, setFormData] = useState({
@@ -35,10 +36,12 @@ export function BlogEditor({ blog, onClose, onSave }: BlogEditorProps) {
     useEffect(() => {
         async function fetchFullBlog() {
             if (blog) {
-                // We'll use a fetch because it's client side. 
-                // But wait, I'll just create a simple action for this.
-                // For now, let's assume we can get it.
                 try {
+                    // Fetch full blog content using getBlogBySlug logic (or a dedicated server action)
+                    // Since it's a client component, we use the server action if available or a fetch.
+                    // Let's assume there is a fetch route or we can create an action.
+                    // Actually, I can just use the server action saveBlog to fetch? No.
+                    // I will create a new server action getFullBlogContent in actions.ts.
                     const response = await fetch(`/api/blog-content/${blog.slug}`);
                     const data = await response.json();
                     setFormData(prev => ({ ...prev, content: data.content }));
@@ -59,7 +62,11 @@ export function BlogEditor({ blog, onClose, onSave }: BlogEditorProps) {
         if (name === "title" && !blog) {
             setFormData((prev) => ({
                 ...prev,
-                slug: value.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "")
+                slug: value.toLowerCase()
+                    .replace(/\s+/g, "-")
+                    .replace(/[^\w-]/g, "")
+                    .replace(/--+/g, "-")
+                    .replace(/^-+|-+$/g, "")
             }));
         }
     };
@@ -69,26 +76,42 @@ export function BlogEditor({ blog, onClose, onSave }: BlogEditorProps) {
         if (!file) return;
 
         setLoading(true);
+        setStatus({ type: null, message: "" });
         const data = new FormData();
         data.append("image", file);
 
         const result = await uploadImage(data);
         if (result.success && result.url) {
             setFormData(prev => ({ ...prev, thumbnailImage: result.url! }));
+        } else {
+            setStatus({ type: 'error', message: result.error || "Upload failed" });
         }
         setLoading(false);
     };
 
     const handleSubmit = async () => {
         setLoading(true);
-        const result = await saveBlog({
-            ...formData,
-            tags: formData.tags.split(",").map(t => t.trim()),
-        });
-        if (result.success) {
-            onSave();
+        setStatus({ type: null, message: "" });
+
+        try {
+            const result = await saveBlog({
+                ...formData,
+                tags: formData.tags.split(",").map(t => t.trim()),
+            });
+
+            if (result.success) {
+                setStatus({ type: 'success', message: "Blog published successfully! Syncing with galaxy..." });
+                setTimeout(() => {
+                    onSave();
+                }, 1500);
+            } else {
+                setStatus({ type: 'error', message: result.error || "Failed to save blog" });
+            }
+        } catch (e) {
+            setStatus({ type: 'error', message: "An unexpected error occurred" });
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     if (contentLoading) {
@@ -113,6 +136,12 @@ export function BlogEditor({ blog, onClose, onSave }: BlogEditorProps) {
                     </Button>
                 </div>
             </div>
+
+            {status.type && (
+                <div className={`p-4 rounded-xl border ${status.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
+                    {status.message}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="space-y-6">
