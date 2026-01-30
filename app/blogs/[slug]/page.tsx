@@ -9,6 +9,9 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function generateStaticParams() {
     const blogs = await getAllBlogs();
     return blogs.map((blog) => ({

@@ -57,7 +57,17 @@ export function BlogEditor({ blog, onClose, onSave }: BlogEditorProps) {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+
+        let newValue = value;
+        if (name === "slug") {
+            newValue = value.toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^\w-]/g, "")
+                .replace(/--+/g, "-")
+                .replace(/^-+|-+$/g, "");
+        }
+
+        setFormData((prev) => ({ ...prev, [name]: newValue }));
 
         if (name === "title" && !blog) {
             setFormData((prev) => ({

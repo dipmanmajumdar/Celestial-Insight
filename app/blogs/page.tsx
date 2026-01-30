@@ -2,6 +2,9 @@ import { getAllBlogs } from "@/lib/blog";
 import { BlogList } from "@/components/blog/BlogList";
 import { SparklesCore } from "@/components/aceternity/Sparkles";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function BlogsPage() {
     const blogs = await getAllBlogs();
 

@@ -63,8 +63,9 @@ export async function saveBlog(blog: {
 }): Promise<{ success: boolean; error?: string }> {
     if (!(await isAuthenticated())) throw new Error("Unauthorized");
 
-    // Auto-generate slug if title is provided and slug is not (or if it's a new blog)
-    const generatedSlug = blog.slug || blog.title.toLowerCase()
+    // Ensure slug is always sanitized, whether provided or generated
+    const rawSlug = blog.slug || blog.title;
+    const generatedSlug = rawSlug.toLowerCase()
         .replace(/\s+/g, "-")
         .replace(/[^\w-]/g, "")
         .replace(/--+/g, "-")
